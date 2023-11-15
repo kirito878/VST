@@ -209,6 +209,7 @@ docs/api
 *.pkl
 *.npy
 *.pth
+!best_ckpt.pth
 *.onnx
 *.engine
 events.out.tfevents*

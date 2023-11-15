@@ -8,7 +8,7 @@ import time
 from loguru import logger
 
 import cv2
-
+import pandas as pd
 import torch
 
 from yolox.data.data_augment import ValTransform
@@ -181,8 +181,25 @@ class Predictor(object):
         scores = output[:, 4] * output[:, 5]
 
         vis_res = vis(img, bboxes, scores, cls, cls_conf, self.cls_names)
-        return vis_res
+        
+        cls = cls.unsqueeze(dim=-1)
+        scores = scores.unsqueeze(dim=-1)
+        return vis_res , torch.cat((cls, scores, bboxes), dim=1)
+def label2txt(save_file_name,outputs):
+    dtypes = {
+            "class": "int32",
+            "x_min": "int32",
+            "y_min": "int32",
+            "x_max": "int32",
+            "y_max": "int32",
+        }
+    columns = ["class", "score", "x_min", "y_min", "x_max", "y_max"]
 
+    data = pd.DataFrame(
+        outputs.numpy(),
+        columns=columns,
+    ).astype(dtypes)
+    data.to_csv(save_file_name, sep=" ", index=False, header=False, encoding="utf-8")  
 
 def image_demo(predictor, vis_folder, path, current_time, save_result):
     if os.path.isdir(path):
@@ -192,7 +209,7 @@ def image_demo(predictor, vis_folder, path, current_time, save_result):
     files.sort()
     for image_name in files:
         outputs, img_info = predictor.inference(image_name)
-        result_image = predictor.visual(outputs[0], img_info, predictor.confthre)
+        result_image,outputs = predictor.visual(outputs[0], img_info, predictor.confthre)
         if save_result:
             save_folder = os.path.join(
                 vis_folder, time.strftime("%Y_%m_%d_%H_%M_%S", current_time)
@@ -201,6 +218,13 @@ def image_demo(predictor, vis_folder, path, current_time, save_result):
             save_file_name = os.path.join(save_folder, os.path.basename(image_name))
             logger.info("Saving detection result in {}".format(save_file_name))
             cv2.imwrite(save_file_name, result_image)
+            
+            save_folder = os.path.join(save_folder,"label_txt")
+            os.makedirs(save_folder,exist_ok=True)
+            id = os.path.basename(image_name).split(".")[0]
+            txt_file = id  +".txt"
+            save_file_name = os.path.join(save_folder,txt_file)
+            label2txt(save_file_name,outputs)
         ch = cv2.waitKey(0)
         if ch == 27 or ch == ord("q") or ch == ord("Q"):
             break

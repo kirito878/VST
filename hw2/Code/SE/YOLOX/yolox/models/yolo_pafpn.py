@@ -8,6 +8,7 @@ import torch.nn as nn
 from .darknet import CSPDarknet
 from .network_blocks import BaseConv, CSPLayer, DWConv
 
+from .attention import SELayer
 
 class YOLOPAFPN(nn.Module):
     """
@@ -79,7 +80,9 @@ class YOLOPAFPN(nn.Module):
             depthwise=depthwise,
             act=act,
         )
-
+        self.se_1 = SELayer(int(in_channels[2] * width))
+        self.se_2 = SELayer(int(in_channels[1] * width))
+        self.se_3 = SELayer(int(in_channels[0] * width))
     def forward(self, input):
         """
         Args:
@@ -93,7 +96,9 @@ class YOLOPAFPN(nn.Module):
         out_features = self.backbone(input)
         features = [out_features[f] for f in self.in_features]
         [x2, x1, x0] = features
-
+        x0 = self.se_1(x0)
+        x1 = self.se_2(x1)
+        x2 = self.se_3(x2)        
         fpn_out0 = self.lateral_conv0(x0)  # 1024->512/32
         f_out0 = self.upsample(fpn_out0)  # 512/16
         f_out0 = torch.cat([f_out0, x1], 1)  # 512->1024/16
